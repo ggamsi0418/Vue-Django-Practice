@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Vue.js - Django todo app
+{% endblock title %}
+
+{% block extra-style %}
+    <style>
+        body {
+            text-align: center;
+            background-color: #ddd;
+        }
+        .inputBox {
+            margin: auto;
+            width: 70%;
+            background: white;
+            height: 50px;
+            border-radius: 50px;
+            line-height: 50px;
+        }
+        .inputBox .name {
+            border-style: none;
+            border-bottom: 1px solid #ddd;
+            width: 90px;
+            padding-left: 20px;
+            line-height: 20px;
+        }
+        .inputBox .item {
+            border-style: none;
+            border-bottom: 1px solid #ddd;
+            width: 400px;
+            margin-left: 50px;
+            padding-left: 20px;
+            line-height: 20px;
+
+        }
+        .todoList {
+            list-style: none;
+            padding: 10px 0;
+            text-align: left;
+        }
+        .todoList li {
+            display: flex;
+            height: 50px;
+            line-height: 50px;
+            margin: 0.5rem 0;
+            padding: 0 0.9rem;
+            background: white;
+            border-radius: 5px;
+        }
+        .removeBtn {
+            margin-left: auto;
+            font-size: 20px;
+            background: none;
+        }
+
+        .removeBtn:hover {
+            color: red;
+        }
+        button {
+            cursor: pointer;
+            border: 0;
+            outline: 0;
+        }
+    </style>
+{% endblock extra-style %}
+
+
+{% block content %}
+    <div id='app'>
+
+        <h1>My Todo App !</h1>
+        <strong>서로 할 일이나 의견을 공유해 봅시다.</strong>
+        <br>
+
+        <!-- vue를 통해서 서버에 요청할 것이기 때문에 form 형식을 사용할 필요가 없다.-->
+        <div class="inputBox">
+            <input class="name" type="text" placeholder="name ..." v-model.trim="name">
+            <input class="item" type="text" placeholder="type anything welcomed ..." v-model.trim="todo" v-on:keyup.enter='add_todo()'>
+            <button class=" btn btn-primary btn-sm" type="button" v-on:click="add_todo()">ADD</button>
+        </div>
+
+        <ul class="todoList">
+            <li v-for ='(todo, index) in todoList'>
+                <span>[[ todo.name ]]:: [[ todo.todo ]]</span>
+                <button type="button" class="removeBtn" v-on:click="remove_todo(todo, index)">x</button>
+            </li>
+        </ul>
+    </div>
+{% endblock content %}
+
+{% block extra-script %}
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        axios.defaults.xsrfCookieName = 'csrftoken'
+        axios.defaults.xsrfHeaderName = 'X-CSRFToken'
+
+
+        var vm = new Vue({
+            delimiters: ['[[', ']]'], // (vue) 머스타치 문법에서 중괄호 한 번만 사용하겠다는 뜻
+            el:'#app',
+            data:{
+                name: '',
+                todo: '',
+                todoList: [],
+            },
+            // Life cycle hook : created
+            // Vue 인스턴스가 생성되는 시점에 실행되는 함수를 정의
+            created: function() {
+                console.log('created()...');
+                // 직접 axios.get()을 정의해도 되지만, 일반적으로는 메소드 호출을 이용
+                this.fetch_all_todo();
+            },
+            methods:{
+                fetch_all_todo: function() {
+                    console.log('fetch_all_todo()...');
+
+                    // 자바스크립트의  'this'는 위치에 따라서 의미가 달라지므로 유의해야 한다.
+                    // 일반적으로 Vue 인스턴스 내에서의 this는 해당 Vue 인스턴스를 의미한다.
+                    // 그러나 axios.get() 구문 내에서 콜백함수 내에 정의된 this는 window 객체를 의미한다.
+                    // 이를 해결하는 방법으로 '화살표 함수'를 이용할 수 있지만, 로컬 변수에 임시로 this(vue 인스턴스)를 저장해뒀다가 사용할 수도 있다.
+                    var vm = this;
+
+                    axios.get('/api/todo/list')
+                    .then(function(res) {
+                        console.log('GET RES', res);
+                        vm.todoList = res.data; // 여기서 this는 window 객체를 의미한다.
+                    })
+                    .catch(function(err) {
+                        console.log('GET ERR', err);
+                    })
+                },
+                add_todo: function() {
+                    console.log("add_todo()...");
+                    if (this.todo === '') return;
+                    if (this.name === '') this.name = '홍길동';
+                    
+                    // key 값은 db 테이블의 컬럼명과 일치해야 한다.
+                    var postData = {
+                        name: this.name,
+                        todo: this.todo
+                    }
+                    var vm = this
+                    axios.post('/api/todo/create/', postData)
+                        .then(function(res) {
+                            console.log("POST RES", res)
+                            vm.todoList.push({id: res.data.id, name: res.data.name, todo: res.data.todo})
+                        })
+                        .catch(function(err) {
+                            console.log("POST ERR", err)
+
+                        })
+                    this.name = this.todo = '';
+                },
+                remove_todo: function(todo, index) {
+                    console.log("remove_todo()...", index);
+                    if (confirm("Really Delete ?") === false) return;
+                    
+                    var vm = this
+                    axios.delete('/api/todo/' + todo.id + '/delete/')
+                        .then(function(res) {
+                            console.log("DELETE RES", res);
+                            vm.todoList.splice(index, 1);
+                        })
+                        .catch(function(err){
+                            console.log("DELETE RES", err);
+                        })
+                },
+            },
+        })
+    </script>
+{% endblock extra-script %}
